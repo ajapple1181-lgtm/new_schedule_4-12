@@ -6,7 +6,7 @@
    - remain label: subject name (or life block name)
 
    追加
-   - 勉強は 26:00 まで自動配置
+   - 勉強は翌日 1:59:59 相当まで自動配置
    - 科目/内容の「—」は自由記述
    - 生活設定の「準備」を削除
    - 生活ブロック追加の種類から 食事/風呂 を削除し、休憩を追加
@@ -80,8 +80,7 @@ function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
 /* ===== time policies ===== */
 const NO_STUDY_BEFORE_MIN = 6 * 60;
-const STUDY_DAY_END_MIN = 26 * 60;     // ★ 26:00 まで
-const LOGICAL_DAY_SPLIT_MIN = 2 * 60;  // 0:00〜2:00 は前日側に寄せる表示
+const STUDY_DAY_END_MIN = 26 * 60;     // ★ 自動配置は翌日 1:59:59 相当まで許可
 
 /* ===== second 30 move options ===== */
 function buildSecondMoveOptions() {
@@ -98,7 +97,7 @@ const SECOND_MOVE_OPTIONS = buildSecondMoveOptions();
 const TL_SLOT_MIN = 15;
 const TL_SLOT_H = 18;
 const TL_PX_PER_MIN = TL_SLOT_H / TL_SLOT_MIN;
-const TL_DAY_TOTAL_MIN = 26 * 60;
+const TL_DAY_TOTAL_MIN = 24 * 60;   // ★ 表示は1日 0:00〜23:59
 const TL_DAY_SLOTS = TL_DAY_TOTAL_MIN / TL_SLOT_MIN;
 
 /* ===== subject config ===== */
@@ -454,7 +453,7 @@ function loadState() {
 }
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+                                    }
 
 /* ===== ui helpers ===== */
 function el(tag, cls, text) {
@@ -642,8 +641,7 @@ function isTaskComplete(taskId) {
   const p = ensureProgress(taskId, steps.length);
   const totalSec = computeTotalSec(task);
   return (countDone(p.doneSteps) === steps.length) || ((p.spentSec || 0) >= totalSec);
-    }
-
+}
 function runnerStart(taskId) {
   if (!taskId) return;
   state.runner.arrivalShownTaskId = null;
@@ -678,15 +676,8 @@ function openArrivalDialog(taskId) {
 }
 
 /* ===== schedule ownership / dates ===== */
-function logicalDateForMs(ms) {
-  const d = new Date(ms);
-  const mins = d.getHours() * 60 + d.getMinutes();
-  if (mins < LOGICAL_DAY_SPLIT_MIN) d.setDate(d.getDate() - 1);
-  d.setHours(0,0,0,0);
-  return dateStr(d);
-}
-function belongsToLogicalDateByStart(block, dateS) {
-  return logicalDateForMs(block.startMs) === dateS;
+function belongsToDateByStart(block, dateS) {
+  return dateStr(new Date(block.startMs)) === dateS;
 }
 function timelineDatesWindow(centerDateS) {
   const start = addDaysStr(centerDateS, -1);
@@ -804,9 +795,9 @@ function buildLifeBlocksForDate(dateS, lifeRaw) {
   const lunchSt = autoMealStartMs("lunch", dateS, life, info);
   if (life.lunchUse === "あり" && Number.isFinite(lunchSt)) {
     push("life", "昼食", lunchSt, lunchSt + life.lunchMin * 60 * 1000, { source:"routine", meal:"lunch" });
-  }
+                                     }
 
-  if (Number.isFinite(info.baseEndMs)) {
+if (Number.isFinite(info.baseEndMs)) {
     if (life.returnMoveType === "60") {
       const moveEnd = info.baseEndMs + 60 * 60 * 1000;
       push("life", "移動", info.baseEndMs, moveEnd, { source:"routine", returnType:"60" });
@@ -1300,9 +1291,16 @@ function openRunner(taskId, segmentEndMs = null) {
 
     stepBtns.forEach((obj, i) => {
       const doneOne = !!p2.doneSteps[i];
+      const isExpected = (i === expectedIdx) && !doneOne;
+
       obj.btn.classList.toggle("isDone", doneOne);
-      obj.right.textContent = doneOne ? "完了" : "";
-      obj.guide.classList.toggle("isExpectedPulse", i === expectedIdx);
+      obj.btn.classList.toggle("isExpectedFocus", isExpected);
+
+      obj.guide.classList.toggle("isExpectedPulse", isExpected);
+
+      if (doneOne) obj.right.textContent = "完了";
+      else if (isExpected) obj.right.textContent = "← 今ここ";
+      else obj.right.textContent = "";
     });
   }
 
@@ -1358,7 +1356,6 @@ function openCustomLifeEdit(dateS, cbId) {
   const r2 = document.createElement("input"); r2.type = "radio"; r2.name = "lifeEditMode";
   if ((local.mode || "minutes") === "minutes") r1.checked = true;
   else r2.checked = true;
-
   const l1 = el("label","row",""); l1.style.gap="8px"; l1.appendChild(r1); l1.appendChild(el("div","", "何分間"));
   const l2 = el("label","row",""); l2.style.gap="8px"; l2.appendChild(r2); l2.appendChild(el("div","", "時刻（開始→終了）"));
   modeRow.appendChild(l1); modeRow.appendChild(l2);
@@ -1604,7 +1601,7 @@ function renderLife() {
   mealRow("昼食", "lunchUse", "lunchStart", "lunchMin");
   mealRow("夕食", "dinnerUse", "dinnerStart", "dinnerMin");
 
-  settingsCard.appendChild(gm);
+settingsCard.appendChild(gm);
   settingsCard.appendChild(el("div", "hr"));
 
   const g2 = el("div", "grid2");
@@ -1767,7 +1764,7 @@ function renderLife() {
   listCard.appendChild(el("div","", "この日の生活リスト"));
 
   const allBlocks = buildAllBlocksForWindow();
-  const blocks = allBlocks.filter(b => b.kind === "life" && belongsToLogicalDateByStart(b, state.selectedDate));
+  const blocks = allBlocks.filter(b => b.kind === "life" && belongsToDateByStart(b, state.selectedDate));
 
   if (!blocks.length) {
     listCard.appendChild(el("div","note","（生活ブロックはまだありません）"));
@@ -1919,7 +1916,6 @@ function openStudyEdit(taskId) {
   function rebuildSubjectAndType() {
     const prevSubjectFree = subjectUI.input.value || "";
     const prevTypeFree = taskTypeUI.input.value || "";
-
     const currentSubjectValue = subjectUI.select.value === "__free__" ? prevSubjectFree : subjectUI.select.value;
     const currentTypeValue = taskTypeUI.select.value === "__free__" ? prevTypeFree : taskTypeUI.select.value;
 
@@ -2000,8 +1996,9 @@ function openStudyEdit(taskId) {
       localRanges.push({start:"", end:""});
       renderLocalRanges();
     }));
-  }
-  renderLocalRanges();
+                        }
+
+renderLocalRanges();
 
   body.appendChild(el("div","hr"));
   body.appendChild(el("div","", "範囲"));
@@ -2303,46 +2300,28 @@ function renderStudy() {
 /* ===== timeline helpers ===== */
 function daySegmentsForDate(blocks, dateS) {
   const dayStart = parseDateStr(dateS).getTime();
-  const logicalEnd = dayStart + TL_DAY_TOTAL_MIN * 60 * 1000;
-  const splitMs = dayStart + LOGICAL_DAY_SPLIT_MIN * 60 * 1000;
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000;
 
   return (blocks || [])
-    .filter(b => b.endMs > dayStart && b.startMs < logicalEnd)
+    .filter(b => b.endMs > dayStart && b.startMs < dayEnd)
     .map(b => {
-      let startMs = Math.max(b.startMs, dayStart);
-      let endMs = Math.min(b.endMs, logicalEnd);
-
-      if (b.startMs < splitMs) {
-        if (b.startMs >= dayStart) return null;  // 0:00〜2:00開始は前日側に表示
-        startMs = Math.max(startMs, splitMs);    // 前日から継続は2:00以降だけこの日に表示
-      }
-
+      const startMs = Math.max(b.startMs, dayStart);
+      const endMs = Math.min(b.endMs, dayEnd);
       if (endMs <= startMs) return null;
 
-      const continuesFromPrev = b.startMs < startMs;
-      const continuesToNext = b.endMs > endMs;
+      const continuesFromPrev = b.startMs < dayStart;
+      const continuesToNext = b.endMs > dayEnd;
       const meta = { ...(b.meta || {}), continuesFromPrev, continuesToNext };
+
       return { ...b, startMs, endMs, meta };
     })
     .filter(Boolean)
     .sort((a,b)=>a.startMs-b.startMs);
 }
 function getNowMarkerForDate(dateS, nowMs) {
-  const dayStart = parseDateStr(dateS).getTime();
-  const actual = new Date(nowMs);
-  const actualDateS = dateStr(actual);
-  const mins = actual.getHours() * 60 + actual.getMinutes();
-
-  if (actualDateS === dateS && mins >= LOGICAL_DAY_SPLIT_MIN) {
-    return mins;
-  }
-
-  const prevDateS = addDaysStr(actualDateS, -1);
-  if (mins < LOGICAL_DAY_SPLIT_MIN && prevDateS === dateS) {
-    return 24 * 60 + mins;
-  }
-
-  return null;
+  const d = new Date(nowMs);
+  if (dateStr(d) !== dateS) return null;
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 /* ===== render: timeline ===== */
@@ -2363,7 +2342,7 @@ function renderTimeline() {
     head.appendChild(el("div","dayWday", weekdayJa(d)));
 
     const axis = el("div","timeAxis");
-    for (let h=0; h<=26; h++) {
+    for (let h=0; h<=23; h++) {
       const tick = el("div","timeTick", `${h}:00`);
       tick.style.top = `${h * 60 * TL_PX_PER_MIN}px`;
       axis.appendChild(tick);
