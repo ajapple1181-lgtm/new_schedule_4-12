@@ -4,7 +4,7 @@
    - timeline fixed time axis + NOW dashed line
    - second30Start: 17:00〜21:30, :00/:15/:30 only (no :45)
    - remain label: subject name (or life block name)
-
+   
    追加
    - 勉強は翌日 1:59:59 相当まで自動配置
    - 科目/内容の「—」は自由記述
