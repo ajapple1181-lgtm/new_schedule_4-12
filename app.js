@@ -328,7 +328,7 @@ function templateSat() {
     breakfastMin: 30,
 
     lunchUse: "あり",
-    lunchStart: "",
+    lunchStart: "13:00",
     lunchMin: 45,
 
     dinnerUse: "あり",
