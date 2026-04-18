@@ -357,7 +357,7 @@ function templateSun() {
     clubStart: "",
     clubEnd: "",
     returnMoveType: "30",
-    returnMoveBase: "",
+    returnMoveBase: "18:30",
     second30Start: "",
 
     breakfastUse: "あり",
@@ -365,11 +365,11 @@ function templateSun() {
     breakfastMin: 60,
 
     lunchUse: "あり",
-    lunchStart: "",
+    lunchStart: "13:00",
     lunchMin: 45,
 
     dinnerUse: "あり",
-    dinnerStart: "",
+    dinnerStart: "19:00",
     dinnerMin: 45,
 
     studyStart: "",
