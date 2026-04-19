@@ -4,7 +4,7 @@
    - timeline fixed time axis + NOW dashed line
    - second30Start: 17:00〜21:30, :00/:15/:30 only (no :45)
    - remain label: subject name (or life block name)
-   
+
    追加
    - 勉強は翌日 1:59:59 相当まで自動配置
    - 科目/内容の「—」は自由記述
@@ -122,7 +122,7 @@ const SUBJECTS_BY_GROUP = {
 
 const TASKTYPE_BY_SUBJECT = {
   "論国": ["—", "復習", "漢字", "現代文課題"],
-  "古典": ["—", "予習", "復習", "古文単語", "古典課題"],
+  "古典": ["—", "予習", "復習", "古文単語", "古文課題", "漢文課題"],
 
   "数Ⅲ": ["—", "予習", "復習", "4STEP", "課題"],
   "数C": ["—", "予習", "復習", "4STEP", "課題"],
@@ -151,17 +151,17 @@ const TASKTYPE_UNION = allTaskTypesUnion();
 
 /* ===== life config ===== */
 const LIFE_TYPE_OPTIONS = [
-  "-", "休憩", "移動", "準備", "ラジオ", "テレビ", "爪切り", "散髪",
+  "-", "移動", "準備", "ラジオ", "テレビ", "爪切り", "散髪", "休憩",
 ];
 
 const LIFE_AUTO_MIN = {
-  "休憩": 15,
   "移動": 30,
   "準備": 15,
   "ラジオ": 60,
   "テレビ": 60,
   "爪切り": 15,
   "散髪": 60,
+  "休憩": 15,
 };
 
 function emptyLifeSettings() {
@@ -198,6 +198,7 @@ function emptyLifeSettings() {
 
     bath: "なし",
     bathMin: "",
+    bathStart: "",
 
     sleepUse: "なし",
     bedTime: "",
@@ -265,6 +266,7 @@ function templateMonWedFri() {
 
     bath: "あり",
     bathMin: 60,
+    bathStart: "",
     sleepUse: "あり",
     bedTime: "00:30",
     wakeTime: "06:30",
@@ -302,6 +304,7 @@ function templateTueThu() {
 
     bath: "あり",
     bathMin: 60,
+    bathStart: "",
     sleepUse: "あり",
     bedTime: "00:30",
     wakeTime: "06:30",
@@ -325,10 +328,10 @@ function templateSat() {
 
     breakfastUse: "あり",
     breakfastStart: "06:30",
-    breakfastMin: 30,
+    breakfastMin: 60,
 
     lunchUse: "あり",
-    lunchStart: "13:00",
+    lunchStart: "",
     lunchMin: 45,
 
     dinnerUse: "あり",
@@ -339,6 +342,7 @@ function templateSat() {
 
     bath: "あり",
     bathMin: 60,
+    bathStart: "",
     sleepUse: "あり",
     bedTime: "00:00",
     wakeTime: "07:00",
@@ -357,7 +361,7 @@ function templateSun() {
     clubStart: "",
     clubEnd: "",
     returnMoveType: "30",
-    returnMoveBase: "18:30",
+    returnMoveBase: "",
     second30Start: "",
 
     breakfastUse: "あり",
@@ -365,17 +369,18 @@ function templateSun() {
     breakfastMin: 60,
 
     lunchUse: "あり",
-    lunchStart: "13:00",
+    lunchStart: "",
     lunchMin: 45,
 
     dinnerUse: "あり",
-    dinnerStart: "19:00",
+    dinnerStart: "",
     dinnerMin: 45,
 
     studyStart: "",
 
     bath: "あり",
     bathMin: 60,
+    bathStart: "",
     sleepUse: "あり",
     bedTime: "00:00",
     wakeTime: "06:30",
@@ -459,7 +464,7 @@ function loadState() {
 }
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-                                    }
+}
 
 /* ===== ui helpers ===== */
 function el(tag, cls, text) {
@@ -801,9 +806,9 @@ function buildLifeBlocksForDate(dateS, lifeRaw) {
   const lunchSt = autoMealStartMs("lunch", dateS, life, info);
   if (life.lunchUse === "あり" && Number.isFinite(lunchSt)) {
     push("life", "昼食", lunchSt, lunchSt + life.lunchMin * 60 * 1000, { source:"routine", meal:"lunch" });
-                                     }
+  }
 
-if (Number.isFinite(info.baseEndMs)) {
+  if (Number.isFinite(info.baseEndMs)) {
     if (life.returnMoveType === "60") {
       const moveEnd = info.baseEndMs + 60 * 60 * 1000;
       push("life", "移動", info.baseEndMs, moveEnd, { source:"routine", returnType:"60" });
@@ -831,6 +836,17 @@ if (Number.isFinite(info.baseEndMs)) {
   const dinnerSt = autoMealStartMs("dinner", dateS, life, info);
   if (life.dinnerUse === "あり" && Number.isFinite(dinnerSt)) {
     push("life", "夕食", dinnerSt, dinnerSt + life.dinnerMin * 60 * 1000, { source:"routine", meal:"dinner" });
+  }
+
+  // 風呂（開始時刻が入っていれば手動配置）
+  if (life.bath === "あり" && life.bathStart) {
+    const st = msOfDateTime(dateS, life.bathStart);
+    if (Number.isFinite(st)) {
+      push("life", "風呂", st, st + life.bathMin * 60 * 1000, {
+        source: "routine",
+        bathManual: true
+      });
+    }
   }
 
   return blocks;
@@ -865,7 +881,7 @@ function buildEndOfDayBlocks(dateS, lifeRaw, existingBlocks) {
   const sleepInfo = computeSleepBlock(dateS, life);
   if (sleepInfo && sleepInfo.err) return { blocks: [], err: sleepInfo.err };
 
-  if (life.bath === "あり" && sleepInfo?.bedMs) {
+  if (life.bath === "あり" && !life.bathStart && sleepInfo?.bedMs) {
     const st = sleepInfo.bedMs - life.bathMin * 60 * 1000;
     blocks.push({
       id: uid(),
@@ -873,7 +889,7 @@ function buildEndOfDayBlocks(dateS, lifeRaw, existingBlocks) {
       name: "風呂",
       startMs: st,
       endMs: sleepInfo.bedMs,
-      meta: { source:"routine" }
+      meta: { source:"routine", bathManual: false }
     });
   }
 
@@ -1293,7 +1309,7 @@ function openRunner(taskId, segmentEndMs = null) {
     const expectedIdx = getExpectedStepIndex(taskId, blocks, now);
     const showHint = expectedIdx != null && hasRealSteps(t) && parseInt(t.perRangeMin || "", 10) > 0;
     hint.style.display = showHint ? "" : "none";
-    hint.textContent = showHint ? `点滅中の枠が「今このあたりを進めているはず」の目安です（${expectedIdx + 1}番）。` : "";
+    hint.textContent = showHint ? `点滅中の枠が目安です（${expectedIdx + 1}番）。` : "";
 
     stepBtns.forEach((obj, i) => {
       const doneOne = !!p2.doneSteps[i];
@@ -1305,7 +1321,7 @@ function openRunner(taskId, segmentEndMs = null) {
       obj.guide.classList.toggle("isExpectedPulse", isExpected);
 
       if (doneOne) obj.right.textContent = "完了";
-      else if (isExpected) obj.right.textContent = "← 今ここ";
+      else if (isExpected) obj.right.textContent = "今ここ";
       else obj.right.textContent = "";
     });
   }
@@ -1571,7 +1587,7 @@ function renderLife() {
   g.appendChild(wrapField("帰りの移動", returnSel));
 
   const returnBase = mkTimeInput(L.returnMoveBase || "", (v)=>{ L.returnMoveBase=v; saveState(); render(); }, 60);
-  g.appendChild(wrapField("帰り移動 開始（任意）", returnBase));
+  g.appendChild(wrapField("帰り移動 開始（空欄なら自動）", returnBase));
 
   if (L.returnMoveType === "30x2") {
     const st4 = mkSelect(SECOND_MOVE_OPTIONS, L.second30Start || "", (v)=>{ L.second30Start=v; saveState(); render(); }, true);
@@ -1607,19 +1623,41 @@ function renderLife() {
   mealRow("昼食", "lunchUse", "lunchStart", "lunchMin");
   mealRow("夕食", "dinnerUse", "dinnerStart", "dinnerMin");
 
-settingsCard.appendChild(gm);
+  settingsCard.appendChild(gm);
   settingsCard.appendChild(el("div", "hr"));
 
   const g2 = el("div", "grid2");
 
-  const bathSel = mkSelect(["あり","なし"], L.bath || "なし", (v)=>{ L.bath=v; saveState(); render(); });
+  const bathSel = mkSelect(["あり","なし"], L.bath || "なし", (v)=>{
+    L.bath = v;
+    saveState();
+    render();
+  });
+
   const bathMin = document.createElement("input");
-  bathMin.type="number";
-  bathMin.value=String(L.bathMin ?? 60);
+  bathMin.type = "number";
+  bathMin.value = String(L.bathMin ?? 60);
   bathMin.disabled = (L.bath !== "あり");
-  bathMin.addEventListener("change", ()=>{ L.bathMin = clamp(parseInt(bathMin.value||"60",10),1,300); saveState(); render(); });
+  bathMin.addEventListener("change", ()=>{
+    L.bathMin = clamp(parseInt(bathMin.value || "60", 10), 1, 300);
+    saveState();
+    render();
+  });
+
+  const bathStart = mkTimeInput(
+    L.bathStart || "",
+    (v)=>{
+      L.bathStart = v;
+      saveState();
+      render();
+    },
+    60,
+    L.bath !== "あり"
+  );
+
   g2.appendChild(wrapField("風呂", bathSel));
   g2.appendChild(wrapField("風呂（分）", bathMin));
+  g2.appendChild(wrapField("風呂 開始（空欄なら自動）", bathStart));
 
   const sleepSel = mkSelect(["あり","なし"], L.sleepUse || "なし", (v)=>{ L.sleepUse=v; saveState(); render(); });
   g2.appendChild(wrapField("就寝", sleepSel));
@@ -2002,9 +2040,8 @@ function openStudyEdit(taskId) {
       localRanges.push({start:"", end:""});
       renderLocalRanges();
     }));
-                        }
-
-renderLocalRanges();
+  }
+  renderLocalRanges();
 
   body.appendChild(el("div","hr"));
   body.appendChild(el("div","", "範囲"));
